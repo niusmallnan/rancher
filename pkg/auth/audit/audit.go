@@ -2,6 +2,7 @@ package audit
 
 import (
 	"bytes"
+	"compress/gzip"
 	"context"
 	"encoding/json"
 	"io/ioutil"
@@ -122,6 +123,18 @@ func (a *auditLog) write(userInfo *User, reqHeaders, resHeaders http.Header, res
 	}
 	if a.writer.Level >= levelRequestResponse && resHeaders.Get("Content-Type") == contentTypeJSON && len(resBody) > 0 {
 		buffer.WriteString(`,"responseBody":`)
+		if resHeaders.Get("Content-Encoding") == "gzip" {
+			gr, err := gzip.NewReader(bytes.NewBuffer(resBody))
+			if err != nil {
+				return errors.Wrap(err, "failed to gzip newreader")
+			}
+			defer gr.Close()
+			data, err := ioutil.ReadAll(gr)
+			if err != nil {
+				return errors.Wrap(err, "failed to gunzip response body")
+			}
+			resBody = data
+		}
 		buffer.Write(bytes.TrimSuffix(resBody, []byte("\n")))
 	}
 	buffer.WriteString("}")
